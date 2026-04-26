@@ -1,0 +1,16 @@
+fastapi
+lxml
+uvicorn
+sqlalchemy
+psycopg2-binary
+python-dotenv
+httpx
+pandas
+numpy
+ta
+yfinance
+finnhub-python
+apscheduler
+anthropic
+google-genai
+sendgrid
