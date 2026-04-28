@@ -45,9 +45,22 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Allow the production Vercel frontend, any preview deploys (*.vercel.app),
+# and local dev. Override at runtime by setting CORS_ALLOW_ORIGINS to a
+# comma-separated list of explicit origins.
+import os
+_default_origins = [
+    "https://swing-trader-tau.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+_env_origins = [o.strip() for o in os.getenv("CORS_ALLOW_ORIGINS", "").split(",") if o.strip()]
+_allow_origins = _env_origins or _default_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_allow_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["*"],
     allow_headers=["*"],
 )
