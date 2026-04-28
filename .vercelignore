@@ -1,0 +1,11 @@
+# Tell Vercel to ignore the Python backend at the repo root.
+# The Vercel project's Root Directory is set to `frontend/`,
+# but this file ensures the auto-detector never tries to build
+# FastAPI from the repo root.
+backend/
+fly.toml
+Dockerfile
+Dockerfile.backend
+requirements.txt
+start.sh
+render.yaml

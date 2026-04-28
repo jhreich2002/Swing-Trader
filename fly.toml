@@ -1,0 +1,37 @@
+# Fly.io configuration for the Swing Trader backend.
+#
+# Free-tier behavior:
+#   - auto_stop_machines  = true      → machine sleeps when idle ($0)
+#   - auto_start_machines = true      → wakes on first incoming request
+#   - min_machines_running = 0        → no always-on machine (sleep allowed)
+#
+# Run `fly launch --dockerfile Dockerfile.backend` once to create the app,
+# then `fly deploy` for subsequent updates. Set secrets with `fly secrets set`.
+
+app = "swing-trader-backend"   # change after `fly launch` picks a unique name
+primary_region = "iad"          # pick the region closest to you
+
+[build]
+  dockerfile = "Dockerfile.backend"
+
+[env]
+  PORT = "8000"
+
+[http_service]
+  internal_port = 8000
+  force_https = true
+  auto_stop_machines = true
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ["app"]
+
+  [[http_service.checks]]
+    grace_period = "20s"
+    interval = "30s"
+    method = "GET"
+    timeout = "10s"
+    path = "/api/market/regime"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"   # 256mb often OOMs on the synthesis warm-up; 512mb still free

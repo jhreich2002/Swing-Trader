@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: swing-trader
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    autoDeploy: true
+    healthCheckPath: /api/market/regime
+    envVars:
+      - key: DATABASE_URL
+        value: sqlite:///./swingtrade.db
+      - key: FINNHUB_API_KEY
+        sync: false
+      - key: GOOGLE_API_KEY
+        sync: false
