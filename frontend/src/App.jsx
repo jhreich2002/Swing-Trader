@@ -1,9 +1,12 @@
 import { lazy, Suspense } from "react"
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom"
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
 import NavBar from "./components/layout/NavBar"
 import Dashboard from "./pages/Dashboard"
 
-const WeeklyTrades         = lazy(() => import("./pages/WeeklyTrades"))
+const ActivePortfolio      = lazy(() => import("./pages/ActivePortfolio"))
+const RothIRA              = lazy(() => import("./pages/RothIRA"))
+const PassivePortfolio     = lazy(() => import("./pages/PassivePortfolio"))
+const TotalPortfolio       = lazy(() => import("./pages/TotalPortfolio"))
 const TradeDetail          = lazy(() => import("./pages/TradeDetail"))
 const PortfolioPerformance = lazy(() => import("./pages/PortfolioPerformance"))
 const Watchlist            = lazy(() => import("./pages/Watchlist"))
@@ -30,7 +33,11 @@ export default function App() {
           <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/"                    element={<Dashboard />} />
-              <Route path="/trades"              element={<WeeklyTrades />} />
+              <Route path="/active"              element={<ActivePortfolio />} />
+              <Route path="/roth"                element={<RothIRA />} />
+              <Route path="/passive"             element={<PassivePortfolio />} />
+              <Route path="/portfolios"          element={<TotalPortfolio />} />
+              <Route path="/trades"              element={<Navigate to="/active" replace />} />
               <Route path="/trades/:id"          element={<TradeDetail />} />
               <Route path="/watchlist"           element={<Watchlist />} />
               <Route path="/watchlist/:ticker"   element={<WatchlistDetail />} />

@@ -38,7 +38,7 @@ function Spinner() {
   )
 }
 
-export default function WeeklyTrades() {
+export default function ActivePortfolio() {
   const [week, setWeek]         = useState(getMonday())
   const [recs, setRecs]         = useState([])
   const [loading, setLoading]   = useState(true)
@@ -174,6 +174,7 @@ export default function WeeklyTrades() {
       {/* Header + controls */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-white">Weekly Trade Ideas</h1>
+        <span className="text-xs text-gray-500">Active swing book</span>
 
         <div className="flex items-center gap-3">
           {/* Run Scan button */}
@@ -290,7 +291,7 @@ function PortfolioDashboard({
   return (
     <section className="space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-bold text-white">Your Portfolio</h2>
+        <h2 className="text-xl font-bold text-white">Active Portfolio</h2>
         <button
           onClick={() => setEditorOpen(o => !o)}
           className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white/5 hover:bg-white/10 text-gray-200 border border-border transition-colors"
@@ -301,7 +302,7 @@ function PortfolioDashboard({
 
       {editorOpen && (
         <div className="bg-card border border-border rounded-xl p-5">
-          <HoldingsEditor holdings={holdings} onChange={onHoldingsChange} />
+          <HoldingsEditor holdings={holdings} onChange={onHoldingsChange} portfolioType="active" />
         </div>
       )}
 

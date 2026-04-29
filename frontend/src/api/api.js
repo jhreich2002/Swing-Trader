@@ -36,12 +36,36 @@ export const api = {
   portfolio: {
     performance: () => apiFetch("/api/portfolio/performance"),
     trades:      () => apiFetch("/api/portfolio/trades"),
-    actual:      () => apiFetch("/api/portfolio/actual"),
+
+    // Multi-portfolio scoped accessors. Use api.portfolio.scope("active"|"roth_ira"|"passive").
+    scope: (ptype) => ({
+      actual:    () => apiFetch(`/api/portfolio/${ptype}/actual`),
+      holdings: {
+        list:        ()       => apiFetch(`/api/portfolio/${ptype}/holdings`),
+        setCash:     (amount) => apiFetch(`/api/portfolio/${ptype}/holdings/cash`, jsonBody("PUT", { amount })),
+        upsertStock: (data)   => apiFetch(`/api/portfolio/${ptype}/holdings`, jsonBody("POST", data)),
+        patchStock:  (id, data) => apiFetch(`/api/portfolio/${ptype}/holdings/${id}`, jsonBody("PATCH", data)),
+        remove:      (id)     => apiFetch(`/api/portfolio/${ptype}/holdings/${id}`, { method: "DELETE" }),
+      },
+      recommendations: {
+        latest:   () => apiFetch(`/api/portfolio/${ptype}/recommendations`),
+        generate: () => apiFetch(`/api/portfolio/${ptype}/recommendations`, { method: "POST" }),
+      },
+    }),
+
+    total:           () => apiFetch("/api/portfolio/total"),
+    totalRecommendations: {
+      latest:   () => apiFetch("/api/portfolio/total/recommendations"),
+      generate: () => apiFetch("/api/portfolio/total/recommendations", { method: "POST" }),
+    },
+
+    // ----- legacy unscoped aliases (deprecated, still used by old components) -----
+    actual:      () => apiFetch("/api/portfolio/active/actual"),
     holdings: {
-      list:        ()       => apiFetch("/api/portfolio/holdings"),
-      setCash:     (amount) => apiFetch("/api/portfolio/holdings/cash", jsonBody("PUT", { amount })),
-      upsertStock: (data)   => apiFetch("/api/portfolio/holdings", jsonBody("POST", data)),
-      remove:      (id)     => apiFetch(`/api/portfolio/holdings/${id}`, { method: "DELETE" }),
+      list:        ()       => apiFetch("/api/portfolio/active/holdings"),
+      setCash:     (amount) => apiFetch("/api/portfolio/active/holdings/cash", jsonBody("PUT", { amount })),
+      upsertStock: (data)   => apiFetch("/api/portfolio/active/holdings", jsonBody("POST", data)),
+      remove:      (id)     => apiFetch(`/api/portfolio/active/holdings/${id}`, { method: "DELETE" }),
     },
   },
   scan: {

@@ -1,7 +1,7 @@
 from datetime import datetime
 from sqlalchemy import (
     create_engine, Column, Integer, String, Float, DateTime, Date,
-    Boolean, Text, ForeignKey
+    Boolean, Text, ForeignKey, UniqueConstraint
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from backend.config import DATABASE_URL
@@ -225,33 +225,54 @@ class WatchlistItem(Base):
 
 
 # ---------------------------------------------------------------------------
-# holdings — user's actual portfolio (one global, no auth).
-# kind="cash" is a singleton row using cash_amount; kind="stock" rows use
-# ticker + shares + cost_basis_per_share (one row per ticker).
+# holdings — user's portfolios (active swing-trading book, Roth IRA, passive).
+# Scoped by `portfolio_type`. kind="cash" is a singleton per portfolio;
+# kind="stock" rows use ticker + shares + cost_basis_per_share.
+# `bucket` is Roth-only: index | gold_bonds | long_term_hold.
 # ---------------------------------------------------------------------------
 class Holding(Base):
     __tablename__ = "holdings"
 
     id                   = Column(Integer, primary_key=True)
+    portfolio_type       = Column(String(20), nullable=False, default="active", index=True)
     kind                 = Column(String(10), nullable=False)  # "cash" | "stock"
     ticker               = Column(String(10), index=True)      # NULL for cash
     shares               = Column(Float)                       # NULL for cash
     cost_basis_per_share = Column(Float)                       # NULL for cash
     cash_amount          = Column(Float)                       # NULL for stock
+    bucket               = Column(String(20))                  # roth_ira only
     created_at           = Column(DateTime, default=datetime.utcnow)
     updated_at           = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
 # ---------------------------------------------------------------------------
-# portfolio_snapshots — daily snapshot of total portfolio value & return.
-# Upserted by GET /api/portfolio/actual (one row per calendar day).
+# portfolio_snapshots — daily snapshot per portfolio (one row per portfolio
+# per calendar day). Upserted by GET /api/portfolio/{ptype}/actual.
 # ---------------------------------------------------------------------------
 class PortfolioSnapshot(Base):
     __tablename__ = "portfolio_snapshots"
 
     id                 = Column(Integer, primary_key=True)
-    snapshot_date      = Column(Date, unique=True, nullable=False, index=True)
+    portfolio_type     = Column(String(20), nullable=False, default="active", index=True)
+    snapshot_date      = Column(Date, nullable=False, index=True)
     total_cost_basis   = Column(Float)
     total_market_value = Column(Float)
     return_pct         = Column(Float)
     created_at         = Column(DateTime, default=datetime.utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("portfolio_type", "snapshot_date", name="uq_portfolio_snapshot_per_day"),
+    )
+
+
+# ---------------------------------------------------------------------------
+# advisor_recommendations — cached AI rebalance suggestions per portfolio.
+# Latest row per portfolio_type is the active suggestion (24h TTL in API).
+# ---------------------------------------------------------------------------
+class AdvisorRecommendation(Base):
+    __tablename__ = "advisor_recommendations"
+
+    id             = Column(Integer, primary_key=True)
+    portfolio_type = Column(String(20), nullable=False, index=True)  # active|roth_ira|passive|total
+    created_at     = Column(DateTime, default=datetime.utcnow, index=True)
+    payload_json   = Column(Text)

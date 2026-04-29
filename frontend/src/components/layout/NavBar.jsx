@@ -1,10 +1,12 @@
 import { NavLink } from "react-router-dom"
 
 const links = [
-  { to: "/",           label: "Dashboard" },
-  { to: "/trades",     label: "Weekly Trades" },
-  { to: "/watchlist",  label: "Watchlist" },
-  { to: "/portfolio",  label: "Portfolio" },
+  { to: "/",            label: "Dashboard" },
+  { to: "/active",      label: "Active Portfolio" },
+  { to: "/roth",        label: "Roth IRA" },
+  { to: "/passive",     label: "Passive" },
+  { to: "/portfolios",  label: "Total" },
+  { to: "/watchlist",   label: "Watchlist" },
 ]
 
 export default function NavBar() {

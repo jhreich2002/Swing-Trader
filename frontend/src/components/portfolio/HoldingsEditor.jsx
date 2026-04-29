@@ -1,6 +1,22 @@
 import { useEffect, useState } from "react"
 import { api } from "../../api/api"
 
+const BUCKETS = [
+  { value: "index",          label: "Index" },
+  { value: "gold_bonds",     label: "Gold/Bonds" },
+  { value: "long_term_hold", label: "Long-term hold" },
+]
+
+const _INDEX_TICKERS = new Set(["SPY","VOO","IVV","VTI","QQQ","SCHB","SCHX","VEA","VXUS","IEFA","EFA","ITOT","SPLG"])
+const _GOLD_BOND_TICKERS = new Set(["GLD","IAU","SGOL","TLT","IEF","AGG","BND","LQD","SHY","GOVT","BNDX","TIP"])
+
+function classifyBucket(ticker) {
+  const t = (ticker || "").toUpperCase()
+  if (_INDEX_TICKERS.has(t)) return "index"
+  if (_GOLD_BOND_TICKERS.has(t)) return "gold_bonds"
+  return "long_term_hold"
+}
+
 function NumInput({ value, onChange, placeholder, className = "" }) {
   return (
     <input
@@ -27,18 +43,36 @@ function TextInput({ value, onChange, placeholder, className = "" }) {
   )
 }
 
-export default function HoldingsEditor({ holdings, onChange }) {
+function BucketSelect({ value, onChange, className = "" }) {
+  return (
+    <select
+      value={value || "long_term_hold"}
+      onChange={e => onChange(e.target.value)}
+      className={`bg-background border border-border rounded px-2 py-1 text-sm text-gray-100 w-full focus:outline-none focus:border-blue-500 ${className}`}
+    >
+      {BUCKETS.map(b => <option key={b.value} value={b.value}>{b.label}</option>)}
+    </select>
+  )
+}
+
+export default function HoldingsEditor({ holdings, onChange, portfolioType = "active", showBucket = false }) {
+  const scoped = api.portfolio.scope(portfolioType)
   const [cashDraft, setCashDraft] = useState(String(holdings?.cash ?? 0))
   const [savingCash, setSavingCash] = useState(false)
   const [newTicker, setNewTicker] = useState("")
   const [newShares, setNewShares] = useState("")
   const [newCost, setNewCost] = useState("")
+  const [newBucket, setNewBucket] = useState("long_term_hold")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
 
   useEffect(() => {
     setCashDraft(String(holdings?.cash ?? 0))
   }, [holdings?.cash])
+
+  useEffect(() => {
+    if (showBucket) setNewBucket(classifyBucket(newTicker))
+  }, [newTicker, showBucket])
 
   async function saveCash() {
     const amount = parseFloat(cashDraft)
@@ -47,7 +81,7 @@ export default function HoldingsEditor({ holdings, onChange }) {
     setSavingCash(true)
     setError(null)
     try {
-      await api.portfolio.holdings.setCash(amount)
+      await scoped.holdings.setCash(amount)
       onChange?.()
     } catch (e) {
       setError(e.message)
@@ -67,14 +101,13 @@ export default function HoldingsEditor({ holdings, onChange }) {
     setBusy(true)
     setError(null)
     try {
-      await api.portfolio.holdings.upsertStock({
-        ticker,
-        shares,
-        cost_basis_per_share: cost,
-      })
+      const body = { ticker, shares, cost_basis_per_share: cost }
+      if (showBucket) body.bucket = newBucket
+      await scoped.holdings.upsertStock(body)
       setNewTicker("")
       setNewShares("")
       setNewCost("")
+      setNewBucket("long_term_hold")
       onChange?.()
     } catch (e) {
       setError(e.message)
@@ -87,7 +120,7 @@ export default function HoldingsEditor({ holdings, onChange }) {
     setBusy(true)
     setError(null)
     try {
-      await api.portfolio.holdings.remove(id)
+      await scoped.holdings.remove(id)
       onChange?.()
     } catch (e) {
       setError(e.message)
@@ -97,12 +130,10 @@ export default function HoldingsEditor({ holdings, onChange }) {
   }
 
   async function updateStock(stock, patch) {
-    const next = { ticker: stock.ticker, shares: stock.shares, cost_basis_per_share: stock.cost_basis_per_share, ...patch }
-    if (!next.ticker || !(next.shares > 0) || !(next.cost_basis_per_share >= 0)) return
     setBusy(true)
     setError(null)
     try {
-      await api.portfolio.holdings.upsertStock(next)
+      await scoped.holdings.patchStock(stock.id, patch)
       onChange?.()
     } catch (e) {
       setError(e.message)
@@ -119,7 +150,6 @@ export default function HoldingsEditor({ holdings, onChange }) {
         </div>
       )}
 
-      {/* Cash */}
       <div>
         <label className="block text-xs text-gray-500 uppercase tracking-widest mb-1">Cash ($)</label>
         <div className="flex items-center gap-2 max-w-sm">
@@ -134,7 +164,6 @@ export default function HoldingsEditor({ holdings, onChange }) {
         </div>
       </div>
 
-      {/* Stock holdings */}
       <div>
         <label className="block text-xs text-gray-500 uppercase tracking-widest mb-2">Stock Positions</label>
         <div className="overflow-x-auto">
@@ -144,17 +173,28 @@ export default function HoldingsEditor({ holdings, onChange }) {
                 <th className="text-left font-normal pb-2 pr-3">Ticker</th>
                 <th className="text-right font-normal pb-2 pr-3">Shares</th>
                 <th className="text-right font-normal pb-2 pr-3">Cost / share</th>
+                {showBucket && <th className="text-left font-normal pb-2 pr-3">Bucket</th>}
                 <th className="pb-2 w-10"></th>
               </tr>
             </thead>
             <tbody>
               {(holdings?.stocks ?? []).map(s => (
-                <StockRow key={s.id} stock={s} onUpdate={updateStock} onRemove={removeStock} disabled={busy} />
+                <StockRow
+                  key={s.id}
+                  stock={s}
+                  onUpdate={updateStock}
+                  onRemove={removeStock}
+                  disabled={busy}
+                  showBucket={showBucket}
+                />
               ))}
               <tr className="border-t border-border">
                 <td className="pt-2 pr-3"><TextInput value={newTicker} onChange={setNewTicker} placeholder="AAPL" /></td>
                 <td className="pt-2 pr-3"><NumInput value={newShares} onChange={setNewShares} placeholder="10" /></td>
                 <td className="pt-2 pr-3"><NumInput value={newCost} onChange={setNewCost} placeholder="180.00" /></td>
+                {showBucket && (
+                  <td className="pt-2 pr-3"><BucketSelect value={newBucket} onChange={setNewBucket} /></td>
+                )}
                 <td className="pt-2 text-right">
                   <button
                     onClick={addStock}
@@ -172,7 +212,7 @@ export default function HoldingsEditor({ holdings, onChange }) {
   )
 }
 
-function StockRow({ stock, onUpdate, onRemove, disabled }) {
+function StockRow({ stock, onUpdate, onRemove, disabled, showBucket }) {
   const [shares, setShares] = useState(String(stock.shares))
   const [cost,   setCost]   = useState(String(stock.cost_basis_per_share))
 
@@ -213,6 +253,14 @@ function StockRow({ stock, onUpdate, onRemove, disabled }) {
           className="bg-background border border-border rounded px-2 py-1 text-sm text-gray-100 w-full text-right focus:outline-none focus:border-blue-500"
         />
       </td>
+      {showBucket && (
+        <td className="py-2 pr-3">
+          <BucketSelect
+            value={stock.bucket}
+            onChange={v => onUpdate(stock, { bucket: v })}
+          />
+        </td>
+      )}
       <td className="py-2 text-right">
         <button
           onClick={() => onRemove(stock.id)}
