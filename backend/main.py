@@ -14,6 +14,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from backend.api import market, recommendations, stock, portfolio, scan, watchlist
@@ -24,6 +25,12 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Warm the market synthesis cache at startup so the first request is instant."""
+    # Sweep stale on-disk cache files (older than 48 h) so .cache/ doesn't grow forever
+    try:
+        _sweep_stale_cache(max_age_hours=48)
+    except Exception as e:
+        logger.warning("cache sweep at startup failed: %s", e)
+
     async def _warm():
         # Small delay so all env vars are fully loaded before touching external APIs
         await asyncio.sleep(2)
@@ -37,6 +44,28 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(_warm())
     yield
+
+
+def _sweep_stale_cache(max_age_hours: int = 48) -> None:
+    """Delete .cache/*.json files older than max_age_hours. Skips universe lists."""
+    import time
+    cache_dir = Path(__file__).resolve().parents[1] / ".cache"
+    if not cache_dir.exists():
+        return
+    cutoff = time.time() - max_age_hours * 3600
+    keep_prefixes = ("sp500_universe", "sp400_universe")
+    removed = 0
+    for p in cache_dir.glob("*.json"):
+        if p.name.startswith(keep_prefixes):
+            continue
+        try:
+            if p.stat().st_mtime < cutoff:
+                p.unlink()
+                removed += 1
+        except OSError:
+            pass
+    if removed:
+        logger.info("Cache sweep removed %d stale files from %s", removed, cache_dir)
 
 
 app = FastAPI(
@@ -64,6 +93,9 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Compress JSON/HTML/JS responses larger than 1 KB (≈3-5x reduction on JSON)
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 app.include_router(market.router,          prefix="/api/market",          tags=["market"])
 app.include_router(recommendations.router, prefix="/api/recommendations",  tags=["recommendations"])

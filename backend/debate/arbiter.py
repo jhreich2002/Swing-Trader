@@ -42,6 +42,11 @@ Criteria for EXCLUSION (include=false):
 For stop loss: recommend 1.5x ATR below entry as default. If you don't have ATR, \
 use 5–7% below current price as a rough guide.
 
+For target price: pick a realistic 4–8 week swing target as a percentage above \
+entry, typically 8–25%. Anchor it to the nearest meaningful resistance, prior \
+high, or measured-move projection from the setup. Risk/reward (target_pct / \
+stop_pct) should be at least 1.5:1 to qualify as include=true.
+
 Be rigorous. Reject marginal setups. The user trusts these recommendations \
 to represent high-conviction ideas only. 3–5 final picks per week is the goal."""
 
@@ -88,6 +93,14 @@ _SUBMIT_VERDICT_DECLARATION = {
                 "description": (
                     "Recommended holding window in trading days. "
                     "Should fall within the signal-derived window range provided."
+                ),
+            },
+            "target_price_pct": {
+                "type": "number",
+                "description": (
+                    "Recommended upside target as % above entry. "
+                    "Typically 8–25% for a 4–8 week swing trade. "
+                    "Required when include=true."
                 ),
             },
             "skip_reason": {

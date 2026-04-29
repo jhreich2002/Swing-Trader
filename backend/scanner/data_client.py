@@ -121,6 +121,109 @@ def get_ticker_details(ticker: str) -> dict:
         return {"name": ticker, "sector": "Unknown", "market_cap": None}
 
 
+# ---------------------------------------------------------------------------
+# Fast last-price helpers (used by API routes for live quotes)
+# ---------------------------------------------------------------------------
+
+_PRICE_CACHE_TTL_SEC = 60   # 1-minute in-process cache for last prices
+_price_cache: dict = {}     # ticker -> (timestamp, price)
+
+
+def get_last_price(ticker: str):
+    """Cached single-ticker last price (1-min TTL)."""
+    import time
+    now = time.time()
+    hit = _price_cache.get(ticker)
+    if hit and now - hit[0] < _PRICE_CACHE_TTL_SEC:
+        return hit[1]
+    try:
+        info = yf.Ticker(ticker).fast_info
+        price = getattr(info, "last_price", None)
+        price = float(price) if price is not None else None
+    except Exception as e:
+        logger.warning("get_last_price(%s) failed: %s", ticker, e)
+        price = None
+    _price_cache[ticker] = (now, price)
+    return price
+
+
+def get_last_prices(tickers, max_workers: int = 8) -> dict:
+    """
+    Batched last-price lookup for many tickers. Honors the 1-min cache.
+    Uses one threaded yf.download() call for all uncached tickers (much faster
+    than per-ticker fast_info fetches). Falls back to fast_info on failure.
+    Returns {ticker: price_or_None}.
+    """
+    import time
+
+    out: dict = {}
+    todo: list = []
+    now = time.time()
+    for t in tickers:
+        if not t:
+            continue
+        hit = _price_cache.get(t)
+        if hit and now - hit[0] < _PRICE_CACHE_TTL_SEC:
+            out[t] = hit[1]
+        else:
+            todo.append(t)
+
+    if not todo:
+        return out
+
+    # One batched HTTP call for all uncached tickers
+    fetched: dict = {}
+    try:
+        df = yf.download(
+            tickers=todo,
+            period="2d",
+            interval="1d",
+            group_by="ticker",
+            auto_adjust=False,
+            progress=False,
+            threads=True,
+        )
+        if len(todo) == 1:
+            t = todo[0]
+            try:
+                fetched[t] = float(df["Close"].dropna().iloc[-1])
+            except Exception:
+                fetched[t] = None
+        else:
+            for t in todo:
+                try:
+                    fetched[t] = float(df[t]["Close"].dropna().iloc[-1])
+                except Exception:
+                    fetched[t] = None
+    except Exception as e:
+        logger.warning("batched yf.download failed (%s); falling back to fast_info", e)
+
+    # Fallback for any ticker the batch couldn't resolve
+    missing = [t for t in todo if fetched.get(t) is None]
+    if missing:
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _fetch(t):
+            try:
+                info = yf.Ticker(t).fast_info
+                p = getattr(info, "last_price", None)
+                return t, (float(p) if p is not None else None)
+            except Exception as e:
+                logger.warning("price lookup failed for %s: %s", t, e)
+                return t, None
+
+        with ThreadPoolExecutor(max_workers=min(max_workers, len(missing))) as ex:
+            for t, p in ex.map(_fetch, missing):
+                fetched[t] = p
+
+    ts = time.time()
+    for t in todo:
+        p = fetched.get(t)
+        _price_cache[t] = (ts, p)
+        out[t] = p
+    return out
+
+
 def get_fundamentals(ticker: str) -> dict:
     """
     Returns:

@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 import { api } from "../api/api"
 import TradeTile from "../components/recommendations/TradeTile"
+import HypotheticalReturnsChart from "../components/charts/HypotheticalReturnsChart"
+import ActualReturnsChart from "../components/charts/ActualReturnsChart"
+import PortfolioPieChart from "../components/portfolio/PortfolioPieChart"
+import HoldingsEditor from "../components/portfolio/HoldingsEditor"
 
 function getMonday(d = new Date()) {
   const day = d.getDay()
@@ -40,6 +44,14 @@ export default function WeeklyTrades() {
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState(null)
 
+  // Dashboard state
+  const [hypo,        setHypo]        = useState(null)
+  const [hypoLoading, setHypoLoading] = useState(true)
+  const [actual,      setActual]      = useState(null)
+  const [holdings,    setHoldings]    = useState(null)
+  const [actualLoading, setActualLoading] = useState(true)
+  const [editorOpen,  setEditorOpen]  = useState(false)
+
   // Scan button state
   const [scanStatus, setScanStatus] = useState("idle") // idle | running | complete | error
   const [scanMsg, setScanMsg]       = useState("")
@@ -58,6 +70,35 @@ export default function WeeklyTrades() {
   useEffect(() => {
     loadRecs(week)
   }, [week])
+
+  // Dashboard loaders
+  function loadHypo() {
+    setHypoLoading(true)
+    api.recommendations.hypothetical()
+      .then(setHypo)
+      .catch(() => setHypo(null))
+      .finally(() => setHypoLoading(false))
+  }
+
+  function loadActual() {
+    setActualLoading(true)
+    Promise.all([api.portfolio.actual(), api.portfolio.holdings.list()])
+      .then(([a, h]) => { setActual(a); setHoldings(h) })
+      .catch(() => {})
+      .finally(() => setActualLoading(false))
+  }
+
+  useEffect(() => {
+    loadHypo()
+    loadActual()
+  }, [])
+
+  // Auto-open editor on first visit if portfolio is empty
+  useEffect(() => {
+    if (holdings && (holdings.cash === 0 && (holdings.stocks?.length ?? 0) === 0)) {
+      setEditorOpen(true)
+    }
+  }, [holdings])
 
   // On mount, sync scan status in case a scan is already running
   useEffect(() => {
@@ -118,6 +159,18 @@ export default function WeeklyTrades() {
 
   return (
     <div className="space-y-6">
+      {/* Portfolio dashboard */}
+      <PortfolioDashboard
+        hypo={hypo}
+        hypoLoading={hypoLoading}
+        actual={actual}
+        actualLoading={actualLoading}
+        holdings={holdings}
+        editorOpen={editorOpen}
+        setEditorOpen={setEditorOpen}
+        onHoldingsChange={loadActual}
+      />
+
       {/* Header + controls */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-white">Weekly Trade Ideas</h1>
@@ -201,5 +254,123 @@ export default function WeeklyTrades() {
         </>
       )}
     </div>
+  )
+}
+
+// ----------------------------------------------------------------------------
+// Portfolio dashboard (top of Weekly Trades)
+// ----------------------------------------------------------------------------
+
+function fmtPct(v) {
+  if (v === null || v === undefined || Number.isNaN(v)) return "—"
+  const sign = v >= 0 ? "+" : ""
+  return `${sign}${v.toFixed(2)}%`
+}
+function pctColor(v) {
+  if (v === null || v === undefined || Number.isNaN(v)) return "text-gray-400"
+  return v >= 0 ? "text-green-400" : "text-red-400"
+}
+
+function ChartSkeleton() {
+  return <div className="animate-pulse bg-border/40 rounded h-[260px]" />
+}
+
+function PortfolioDashboard({
+  hypo, hypoLoading,
+  actual, actualLoading,
+  holdings,
+  editorOpen, setEditorOpen,
+  onHoldingsChange,
+}) {
+  const hypoData    = hypo?.data ?? []
+  const hypoTotal   = hypo?.total_return_pct
+  const actualData  = actual?.history ?? []
+  const actualTotal = actual?.return_pct
+
+  return (
+    <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold text-white">Your Portfolio</h2>
+        <button
+          onClick={() => setEditorOpen(o => !o)}
+          className="px-3 py-1.5 rounded-lg text-sm font-medium bg-white/5 hover:bg-white/10 text-gray-200 border border-border transition-colors"
+        >
+          {editorOpen ? "Hide Holdings" : "Manage Holdings"}
+        </button>
+      </div>
+
+      {editorOpen && (
+        <div className="bg-card border border-border rounded-xl p-5">
+          <HoldingsEditor holdings={holdings} onChange={onHoldingsChange} />
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Hypothetical */}
+        <div className="bg-card border border-border rounded-xl p-5">
+          <div className="flex items-baseline justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-widest">
+              Hypothetical Returns
+            </h3>
+            <span className={`text-lg font-bold ${pctColor(hypoTotal)}`}>{fmtPct(hypoTotal)}</span>
+          </div>
+          <p className="text-xs text-gray-500 mb-3">
+            If you took every weekly recommendation
+            {hypo ? ` — ${hypo.n_trades} trade${hypo.n_trades === 1 ? "" : "s"} (${hypo.n_winners}W / ${hypo.n_losers}L${hypo.n_open ? ` / ${hypo.n_open} open` : ""})` : ""}
+          </p>
+          {hypoLoading ? (
+            <ChartSkeleton />
+          ) : hypoData.length > 1 ? (
+            <HypotheticalReturnsChart data={hypoData} />
+          ) : (
+            <div className="h-[260px] flex items-center justify-center text-gray-500 text-sm text-center px-6">
+              No completed simulated trades yet. Run a scan to generate recommendations.
+            </div>
+          )}
+        </div>
+
+        {/* Actual */}
+        <div className="bg-card border border-border rounded-xl p-5">
+          <div className="flex items-baseline justify-between mb-3">
+            <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-widest">
+              Actual Portfolio
+            </h3>
+            <span className={`text-lg font-bold ${pctColor(actualTotal)}`}>{fmtPct(actualTotal)}</span>
+          </div>
+          <p className="text-xs text-gray-500 mb-3">
+            {actual?.total_market_value
+              ? `${actual.total_market_value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} market value · ${actual.total_cost_basis.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 })} cost basis`
+              : "Add cash and stock positions to track returns."}
+          </p>
+          {actualLoading ? (
+            <ChartSkeleton />
+          ) : actualData.length > 1 ? (
+            <ActualReturnsChart data={actualData} />
+          ) : (
+            <div className="h-[260px] flex items-center justify-center text-gray-500 text-sm text-center px-6">
+              {actual?.total_cost_basis > 0
+                ? "Daily snapshots will accumulate here. Check back tomorrow for a curve."
+                : "Click Manage Holdings to enter your cash and stock positions."}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Pie chart */}
+      <div className="bg-card border border-border rounded-xl p-5">
+        <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-widest mb-3">
+          Portfolio Weighting
+        </h3>
+        {actualLoading ? (
+          <ChartSkeleton />
+        ) : (
+          <PortfolioPieChart
+            cash={actual?.cash ?? 0}
+            cashWeight={actual?.cash_weight_pct ?? 0}
+            positions={actual?.positions ?? []}
+          />
+        )}
+      </div>
+    </section>
   )
 }

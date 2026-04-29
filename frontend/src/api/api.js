@@ -6,6 +6,14 @@ async function apiFetch(path, options) {
   return res.json()
 }
 
+function jsonBody(method, body) {
+  return {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  }
+}
+
 export const api = {
   market: {
     regime:    () => apiFetch("/api/market/regime"),
@@ -14,8 +22,9 @@ export const api = {
     news:      () => apiFetch("/api/market/news"),
   },
   recommendations: {
-    list:   (week) => apiFetch(`/api/recommendations${week ? `?week=${week}` : ""}`),
-    detail: (id)   => apiFetch(`/api/recommendations/${id}`),
+    list:         (week) => apiFetch(`/api/recommendations${week ? `?week=${week}` : ""}`),
+    detail:       (id)   => apiFetch(`/api/recommendations/${id}`),
+    hypothetical: ()     => apiFetch("/api/recommendations/hypothetical"),
   },
   stock: {
     chart:        (ticker, type = "candle", days = 90) =>
@@ -27,6 +36,13 @@ export const api = {
   portfolio: {
     performance: () => apiFetch("/api/portfolio/performance"),
     trades:      () => apiFetch("/api/portfolio/trades"),
+    actual:      () => apiFetch("/api/portfolio/actual"),
+    holdings: {
+      list:        ()       => apiFetch("/api/portfolio/holdings"),
+      setCash:     (amount) => apiFetch("/api/portfolio/holdings/cash", jsonBody("PUT", { amount })),
+      upsertStock: (data)   => apiFetch("/api/portfolio/holdings", jsonBody("POST", data)),
+      remove:      (id)     => apiFetch(`/api/portfolio/holdings/${id}`, { method: "DELETE" }),
+    },
   },
   scan: {
     run:    () => apiFetch("/api/scan/run", { method: "POST" }),

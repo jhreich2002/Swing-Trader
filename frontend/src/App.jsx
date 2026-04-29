@@ -1,11 +1,25 @@
+import { lazy, Suspense } from "react"
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom"
 import NavBar from "./components/layout/NavBar"
 import Dashboard from "./pages/Dashboard"
-import WeeklyTrades from "./pages/WeeklyTrades"
-import TradeDetail from "./pages/TradeDetail"
-import PortfolioPerformance from "./pages/PortfolioPerformance"
-import Watchlist from "./pages/Watchlist"
-import WatchlistDetail from "./pages/WatchlistDetail"
+
+const WeeklyTrades         = lazy(() => import("./pages/WeeklyTrades"))
+const TradeDetail          = lazy(() => import("./pages/TradeDetail"))
+const PortfolioPerformance = lazy(() => import("./pages/PortfolioPerformance"))
+const Watchlist            = lazy(() => import("./pages/Watchlist"))
+const WatchlistDetail      = lazy(() => import("./pages/WatchlistDetail"))
+
+function RouteFallback() {
+  return (
+    <div className="flex items-center justify-center py-24 text-gray-500 text-sm">
+      <svg className="animate-spin h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+      </svg>
+      Loading…
+    </div>
+  )
+}
 
 export default function App() {
   return (
@@ -13,14 +27,16 @@ export default function App() {
       <div className="min-h-screen bg-surface text-gray-100 flex flex-col">
         <NavBar />
         <main className="flex-1 max-w-screen-xl mx-auto w-full px-4 py-6">
-          <Routes>
-            <Route path="/"                    element={<Dashboard />} />
-            <Route path="/trades"              element={<WeeklyTrades />} />
-            <Route path="/trades/:id"          element={<TradeDetail />} />
-            <Route path="/watchlist"           element={<Watchlist />} />
-            <Route path="/watchlist/:ticker"   element={<WatchlistDetail />} />
-            <Route path="/portfolio"           element={<PortfolioPerformance />} />
-          </Routes>
+          <Suspense fallback={<RouteFallback />}>
+            <Routes>
+              <Route path="/"                    element={<Dashboard />} />
+              <Route path="/trades"              element={<WeeklyTrades />} />
+              <Route path="/trades/:id"          element={<TradeDetail />} />
+              <Route path="/watchlist"           element={<Watchlist />} />
+              <Route path="/watchlist/:ticker"   element={<WatchlistDetail />} />
+              <Route path="/portfolio"           element={<PortfolioPerformance />} />
+            </Routes>
+          </Suspense>
         </main>
       </div>
     </Router>

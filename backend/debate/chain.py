@@ -88,11 +88,15 @@ def run_debate_chain(
             stop_loss   = None
             if entry_price and verdict.get("stop_loss_pct"):
                 stop_loss = round(entry_price * (1 - verdict["stop_loss_pct"] / 100), 4)
+            target_price = None
+            if entry_price and verdict.get("target_price_pct"):
+                target_price = round(entry_price * (1 + verdict["target_price_pct"] / 100), 4)
 
             rec = Recommendation(
                 signal_id           = signal_id,
                 entry_price         = entry_price,
                 stop_loss           = stop_loss,
+                target_price        = target_price,
                 holding_window_days = verdict.get("holding_window_days", 10),
                 conviction_score    = verdict.get("conviction_score", 5.0),
                 status              = "pending",

@@ -1,6 +1,6 @@
 from datetime import datetime
 from sqlalchemy import (
-    create_engine, Column, Integer, String, Float, DateTime,
+    create_engine, Column, Integer, String, Float, DateTime, Date,
     Boolean, Text, ForeignKey
 )
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
@@ -119,6 +119,7 @@ class Recommendation(Base):
     signal_id           = Column(Integer, ForeignKey("signals.id"), nullable=False)
     entry_price         = Column(Float)
     stop_loss           = Column(Float)
+    target_price        = Column(Float)   # arbiter-set upside target (NULL on legacy rows)
     holding_window_days = Column(Integer)
     conviction_score    = Column(Float)
     status              = Column(String(20), default="pending")  # pending/active/closed/skipped
@@ -221,3 +222,36 @@ class WatchlistItem(Base):
     digest_status  = Column(String(20), default="pending")  # pending|running|complete|error
     digest_json    = Column(Text)   # full JSON blob from digester
     digested_at    = Column(DateTime)
+
+
+# ---------------------------------------------------------------------------
+# holdings — user's actual portfolio (one global, no auth).
+# kind="cash" is a singleton row using cash_amount; kind="stock" rows use
+# ticker + shares + cost_basis_per_share (one row per ticker).
+# ---------------------------------------------------------------------------
+class Holding(Base):
+    __tablename__ = "holdings"
+
+    id                   = Column(Integer, primary_key=True)
+    kind                 = Column(String(10), nullable=False)  # "cash" | "stock"
+    ticker               = Column(String(10), index=True)      # NULL for cash
+    shares               = Column(Float)                       # NULL for cash
+    cost_basis_per_share = Column(Float)                       # NULL for cash
+    cash_amount          = Column(Float)                       # NULL for stock
+    created_at           = Column(DateTime, default=datetime.utcnow)
+    updated_at           = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+# ---------------------------------------------------------------------------
+# portfolio_snapshots — daily snapshot of total portfolio value & return.
+# Upserted by GET /api/portfolio/actual (one row per calendar day).
+# ---------------------------------------------------------------------------
+class PortfolioSnapshot(Base):
+    __tablename__ = "portfolio_snapshots"
+
+    id                 = Column(Integer, primary_key=True)
+    snapshot_date      = Column(Date, unique=True, nullable=False, index=True)
+    total_cost_basis   = Column(Float)
+    total_market_value = Column(Float)
+    return_pct         = Column(Float)
+    created_at         = Column(DateTime, default=datetime.utcnow)
